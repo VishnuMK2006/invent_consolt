@@ -395,9 +395,10 @@ const Sales = () => {
   const fetchSales = async () => {
     try {
       const response = await salesAPI.getAll();
-      
+      console.log('Fetched sales:', response.data);
       setSales(response.data);
     } catch (error) {
+      console.error('Error fetching sales:', error);
       setError("Failed to fetch sales");
     }
   };
@@ -887,11 +888,25 @@ const Sales = () => {
 
   const handleView = async (sale) => {
     try {
+      setError(""); // Clear any previous errors
+      setLoading(true);
+      
+      if (!sale || !sale._id) {
+        throw new Error('Invalid sale data');
+      }
+      
+      console.log('Fetching sale details for ID:', sale._id);
+      
       const response = await salesAPI.getById(sale._id);
+      console.log('Sale details response:', response.data);
+      
       setSelectedSale(response.data);
       setShowViewModal(true);
     } catch (error) {
-      setError("Failed to fetch sale details");
+      console.error('Error fetching sale details:', error);
+      setError("Failed to fetch sale details: " + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1266,7 +1281,11 @@ const Sales = () => {
         {/* View Sale Modal */}
         <StyledModal
           show={showViewModal}
-          onHide={() => setShowViewModal(false)}
+          onHide={() => {
+            setShowViewModal(false);
+            setSelectedSale(null);
+            setError("");
+          }}
           size="lg"
           centered
         >
@@ -1274,19 +1293,32 @@ const Sales = () => {
             <Modal.Title>Sale Details</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            {selectedSale && (
+            {error && (
+              <Alert variant="danger" className="mb-3">
+                {error}
+              </Alert>
+            )}
+            {loading ? (
+              <div className="text-center py-4">
+                <LoadingSpinner />
+                <p className="mt-2">Loading sale details...</p>
+              </div>
+            ) : selectedSale ? (
               <>
                 <Row>
                   <Col md={6}>
                     <h6>Sale Information</h6>
-                    <p><strong>ID:</strong> {selectedSale.saleId}</p>
-                    <p><strong>Date:</strong> {new Date(selectedSale.saleDate).toLocaleString()}</p>
+                    <p><strong>ID:</strong> {selectedSale.saleId || 'N/A'}</p>
+                    <p><strong>Date:</strong> {selectedSale.saleDate ? new Date(selectedSale.saleDate).toLocaleString() : 'N/A'}</p>
                   </Col>
                   <Col md={6}>
                     <h6>Buyer Details</h6>
-                    <p><strong>Name:</strong> {selectedSale.buyer.name}</p>
-                    <p><strong>Email:</strong> {selectedSale.buyer.email}</p>
-                    <p><strong>Phone:</strong> {selectedSale.buyer.phone}</p>
+                    <p><strong>Name:</strong> {selectedSale.buyer?.name || 'N/A'}</p>
+                    <p><strong>Email:</strong> {selectedSale.buyer?.email || 'N/A'}</p>
+                    <p><strong>Phone:</strong> {selectedSale.buyer?.phone || 'N/A'}</p>
+                    {selectedSale.buyer?.address && (
+                      <p><strong>Address:</strong> {selectedSale.buyer.address}</p>
+                    )}
                   </Col>
                 </Row>
 
@@ -1306,13 +1338,18 @@ const Sales = () => {
                     {(selectedSale.items || []).map((item, idx) => (
                       <tr key={item._id || idx}>
                         <td>{idx + 1}</td>
-                        <td>{item.product?.name || '-'}</td>
-                        <td><BarcodeBadge>{item.barcode || item.product?.barcode || '-'}</BarcodeBadge></td>
-                        <td>₹{item.unitPrice?.toFixed(2) ?? '-'}</td>
+                        <td>{item.product?.name || item.productName || 'Unknown Product'}</td>
+                        <td><BarcodeBadge>{item.barcode || item.product?.barcode || 'N/A'}</BarcodeBadge></td>
+                        <td>₹{(item.unitPrice || 0).toFixed(2)}</td>
                         <td>{item.quantity || 1}</td>
                         <td>₹{((item.unitPrice || 0) * (item.quantity || 1)).toFixed(2)}</td>
                       </tr>
                     ))}
+                    {(!selectedSale.items || selectedSale.items.length === 0) && (
+                      <tr>
+                        <td colSpan="6" className="text-center text-muted">No items found</td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot>
                     <tr>
@@ -1349,8 +1386,12 @@ const Sales = () => {
                   </Col>
                 </Row>
                 
-                <TotalDisplay className="mt-4">Total: ₹{selectedSale.totalAmount.toFixed(2)}</TotalDisplay>
+                <TotalDisplay className="mt-4">Total: ₹{selectedSale.totalAmount?.toFixed(2) || '0.00'}</TotalDisplay>
               </>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-muted">No sale data available</p>
+              </div>
             )}
           </Modal.Body>
         </StyledModal>
